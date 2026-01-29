@@ -12,19 +12,23 @@ st.set_page_config(
     layout="wide"
 )
 
+# Initialize session state for jump-to functionality
+if 'jump_to_row' not in st.session_state:
+    st.session_state.jump_to_row = None
+if 'force_show_row' not in st.session_state:
+    st.session_state.force_show_row = None
+
 # Function to convert image to base64
 def get_base64_image(image_path):
-    """Convert image to base64 for embedding in HTML"""
     try:
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode()
     except:
         return None
 
-# Try to load logo
 logo_base64 = get_base64_image("good_sports_logo.png")
 
-# Custom CSS (same as before - truncated for brevity)
+# Custom CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
@@ -45,16 +49,18 @@ st.markdown("""
     .stat-card.new-data { border-left: 5px solid #FF6B35; background: linear-gradient(to right, #FFF5F0 0%, white 10%); }
     .stat-card.updated-data { border-left: 5px solid #0066A1; background: linear-gradient(to right, #E8F4F8 0%, white 10%); }
     .stat-card.old-data { border-left: 5px solid #95A5A6; background: linear-gradient(to right, #F5F5F5 0%, white 10%); }
+    .stat-card.highlight { border: 3px solid #FFD700; box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
     .year-badge { background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: 700; display: inline-block; margin-bottom: 1rem; }
     .new-badge { background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%); color: white; padding: 0.4rem 0.9rem; border-radius: 15px; font-weight: 600; margin-left: 0.5rem; }
     .updated-badge { background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%); color: white; padding: 0.4rem 0.9rem; border-radius: 15px; font-weight: 600; margin-left: 0.5rem; }
     .old-badge { background: linear-gradient(135deg, #95A5A6 0%, #7F8C8D 100%); color: white; padding: 0.4rem 0.9rem; border-radius: 15px; font-weight: 600; margin-left: 0.5rem; }
     .stat-text { color: #2C3E50; font-size: 1.05rem; line-height: 1.6; font-family: 'Montserrat', sans-serif; margin: 1rem 0; }
-    .link-btn, .read-more-btn { background: linear-gradient(135deg, #8B9F3E 0%, #A8B968 100%); color: white; padding: 0.6rem 1.5rem; border-radius: 25px; text-decoration: none; font-weight: 600; display: inline-block; margin: 0.5rem 0.5rem 0 0; transition: transform 0.2s; }
-    .link-btn:hover, .read-more-btn:hover { transform: translateY(-2px); text-decoration: none; color: white; }
+    .read-more-btn { background: linear-gradient(135deg, #8B9F3E 0%, #A8B968 100%); color: white; padding: 0.6rem 1.5rem; border-radius: 25px; text-decoration: none; font-weight: 600; display: inline-block; margin: 0.5rem 0.5rem 0 0; }
     .source-text { color: #7F8C8D; font-size: 0.9rem; margin-top: 0.5rem; }
     .stats-counter { background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%); color: white; padding: 0.75rem 1.5rem; border-radius: 25px; font-weight: 600; display: inline-block; margin-bottom: 1.5rem; }
     .category-title { color: #8B9F3E; font-weight: 700; border-bottom: 3px solid #8B9F3E; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+    .stButton > button { background: linear-gradient(135deg, #8B9F3E 0%, #A8B968 100%) !important; color: white !important; border: none !important; padding: 0.6rem 1.5rem !important; border-radius: 25px !important; font-weight: 600 !important; }
+    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(139, 159, 62, 0.4) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,7 +70,6 @@ EXCEL_FILE = '2025 Good Sports Research Project_Aidan Conte.xlsx'
 def load_data():
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='Research', engine='openpyxl')
-        # FIX MERGED CELLS: Forward-fill Category and Year
         df['Category'] = df['Category'].ffill()
         df['Year'] = df['Year'].ffill()
         return df, None
@@ -101,21 +106,16 @@ def excel_row_to_pandas_index(excel_row):
 def categorize_stat(row, row_index):
     priority = str(row.get('Priority for Updated Stat', '')).strip()
     stat_updated = str(row.get('Stat updated? (see comment)', '')).strip()
-    excel_row = row_index + 2  # Convert to Excel row number
+    excel_row = row_index + 2
     
-    # Rows 79-121 are either New Data or Updated Data
     if 79 <= excel_row <= 121:
-        # Check if it's specifically marked as "New Data"
         if priority == 'New Data':
             return 'new'
-        # Otherwise if it has "Updated" in priority, it's an updated stat
         elif 'Updated' in priority and 'ROW' in priority:
             return 'updated'
-        # If in the range but not specifically categorized, treat as new
         else:
             return 'new'
     
-    # Outside the 79-121 range, check if it's updated or old
     if 'Updated' in priority and 'ROW' in priority:
         return 'updated'
     if stat_updated.startswith('Yes') and 'ROW' in stat_updated:
@@ -156,11 +156,30 @@ st.markdown('<div class="filter-section"><h3>🔍 Filter Research Statistics</h3
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    selected_category = st.selectbox("Select Category:", ["-- All Categories --"] + categories)
+    selected_category = st.selectbox("Select Category:", ["-- All Categories --"] + categories, key='category_select')
 with col2:
-    data_filter = st.selectbox("Data Status:", ["Current Data", "New Data", "Updated Data", "Old Data"])
+    data_filter = st.selectbox("Data Status:", ["Current Data", "New Data", "Updated Data", "Old Data"], key='data_filter')
 
 st.markdown('</div>', unsafe_allow_html=True)
+
+# Handle jump to specific row
+if st.session_state.force_show_row is not None:
+    # Override filter to show the specific row's category
+    target_row = df.iloc[st.session_state.force_show_row]
+    target_category = target_row['Category']
+    target_data_cat = target_row['data_category']
+    
+    # Set filters to show this row
+    if target_category != selected_category:
+        st.info(f"🔍 Showing {target_category} category to display linked stat")
+        selected_category = target_category
+    
+    if target_data_cat == 'old':
+        data_filter = "Old Data"
+    elif target_data_cat == 'updated':
+        data_filter = "Updated Data"
+    elif target_data_cat == 'new':
+        data_filter = "New Data"
 
 # Apply filters
 if selected_category == "-- All Categories --":
@@ -185,6 +204,7 @@ else:
 # Display results
 if len(filtered_df) == 0:
     st.info("No statistics found matching your filters.")
+    st.session_state.force_show_row = None
 else:
     st.markdown(f'<h2 class="category-title">{display_title}</h2>', unsafe_allow_html=True)
     
@@ -203,7 +223,13 @@ else:
     
     for idx, (orig_idx, row) in enumerate(filtered_df.iterrows(), 1):
         category = row['data_category']
+        
+        # Check if this is the row we jumped to
+        is_highlighted = st.session_state.force_show_row == orig_idx
+        
         card_class = f"stat-card {category}-data" if category != 'current' else "stat-card"
+        if is_highlighted:
+            card_class += " highlight"
         
         year = row['Year']
         if isinstance(year, float) and not pd.isna(year):
@@ -215,42 +241,62 @@ else:
         source = row['Source'] if pd.notna(row['Source']) else None
         hyperlink = get_hyperlink(workbook, orig_idx)
         
-        card_html = f'<div class="{card_class}"><div class="year-badge">📅 {year}</div>'
-        
-        if category == 'new':
-            card_html += '<span class="new-badge">✨ NEW DATA</span>'
-        elif category == 'updated':
-            card_html += '<span class="updated-badge">🔄 UPDATED</span>'
-        elif category == 'old':
-            card_html += '<span class="old-badge">📦 OLD VERSION</span>'
-        
-        card_html += f'<div class="stat-text">{stat_text}</div>'
-        if source:
-            card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
-        
-        card_html += '<div style="margin-top: 1rem;">'
-        
-        linked_indices = get_linked_rows(row, category)
-        for link_idx in linked_indices:
-            if 0 <= link_idx < len(df):
-                link_year = df.iloc[link_idx]['Year']
-                if isinstance(link_year, float) and not pd.isna(link_year):
-                    link_year = int(link_year)
-                elif pd.isna(link_year):
-                    link_year = "N/A"
-                
-                if category == 'old':
-                    card_html += f'<a href="#row-{link_idx}" class="link-btn">🔄 View Updated Version ({link_year})</a>'
-                elif category == 'updated':
-                    card_html += f'<a href="#row-{link_idx}" class="link-btn">📜 View Original Data ({link_year})</a>'
-        
-        if hyperlink:
-            card_html += f'<a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>'
-        
-        card_html += '</div></div>'
-        
-        st.markdown(f'<div id="row-{orig_idx}"></div>', unsafe_allow_html=True)
-        st.markdown(card_html, unsafe_allow_html=True)
+        # Create a container for the card
+        with st.container():
+            card_html = f'<div class="{card_class}"><div class="year-badge">📅 {year}</div>'
+            
+            if is_highlighted:
+                card_html += '<span style="background: #FFD700; color: #000; padding: 0.4rem 0.9rem; border-radius: 15px; font-weight: 600; margin-left: 0.5rem;">⭐ LINKED STAT</span>'
+            
+            if category == 'new':
+                card_html += '<span class="new-badge">✨ NEW DATA</span>'
+            elif category == 'updated':
+                card_html += '<span class="updated-badge">🔄 UPDATED</span>'
+            elif category == 'old':
+                card_html += '<span class="old-badge">📦 OLD VERSION</span>'
+            
+            card_html += f'<div class="stat-text">{stat_text}</div>'
+            if source:
+                card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
+            
+            st.markdown(card_html, unsafe_allow_html=True)
+            
+            # Add buttons for linked stats
+            col_btns = st.columns([1, 1, 1, 3])
+            
+            linked_indices = get_linked_rows(row, category)
+            btn_idx = 0
+            for link_idx in linked_indices:
+                if 0 <= link_idx < len(df):
+                    link_year = df.iloc[link_idx]['Year']
+                    if isinstance(link_year, float) and not pd.isna(link_year):
+                        link_year = int(link_year)
+                    elif pd.isna(link_year):
+                        link_year = "N/A"
+                    
+                    with col_btns[btn_idx]:
+                        if category == 'old':
+                            if st.button(f"🔄 View Updated ({link_year})", key=f"link_{orig_idx}_{link_idx}"):
+                                st.session_state.force_show_row = link_idx
+                                st.rerun()
+                        elif category == 'updated':
+                            if st.button(f"📜 View Original ({link_year})", key=f"link_{orig_idx}_{link_idx}"):
+                                st.session_state.force_show_row = link_idx
+                                st.rerun()
+                    btn_idx += 1
+            
+            # Article link
+            if hyperlink:
+                with col_btns[btn_idx]:
+                    st.markdown(f'<a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Article</a>', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Clear the jump flag after displaying
+    if st.session_state.force_show_row is not None:
+        if st.button("↩️ Return to Previous View"):
+            st.session_state.force_show_row = None
+            st.rerun()
 
 st.markdown("""<div class="footer"><strong style="color: #8B9F3E;">Good Sports Research Project</strong> | 2025<br>
 <em>Empowering youth through sports and physical activity</em></div>""", unsafe_allow_html=True)
