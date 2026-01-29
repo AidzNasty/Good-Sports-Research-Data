@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import openpyxl
 import os
+import base64
 
 # Page config
 st.set_page_config(
@@ -10,7 +11,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for Good Sports branding
+# Function to convert image to base64
+def get_base64_image(image_path):
+    """Convert image to base64 for embedding in HTML"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except:
+        return None
+
+# Try to load logo (place logo file in same directory as script)
+logo_base64 = get_base64_image("good_sports_logo.png")
+
+# Custom CSS with Good Sports actual colors
 st.markdown("""
 <style>
     /* Import Google Fonts */
@@ -21,13 +34,32 @@ st.markdown("""
         background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
     }
     
-    /* Custom header */
+    /* Custom header with logo */
     .custom-header {
-        background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
-        padding: 2rem 2rem 1.5rem 2rem;
+        background: linear-gradient(135deg, #8B9F3E 0%, #A8B968 100%);
+        padding: 2rem;
         border-radius: 15px;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.2);
+        box-shadow: 0 4px 15px rgba(139, 159, 62, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+    }
+    
+    .logo-container {
+        flex-shrink: 0;
+    }
+    
+    .logo-container img {
+        height: 80px;
+        background: white;
+        padding: 10px 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .header-text {
+        flex-grow: 1;
     }
     
     .custom-header h1 {
@@ -47,10 +79,10 @@ st.markdown("""
         opacity: 0.95;
     }
     
-    /* Dropdown styling */
+    /* Dropdown styling with Good Sports green */
     .stSelectbox > div > div {
         background-color: white;
-        border: 2px solid #FF6B35;
+        border: 2px solid #8B9F3E;
         border-radius: 8px;
         font-family: 'Montserrat', sans-serif;
         font-weight: 600;
@@ -62,18 +94,18 @@ st.markdown("""
         padding: 1.5rem;
         border-radius: 12px;
         margin-bottom: 1.5rem;
-        border-left: 5px solid #FF6B35;
+        border-left: 5px solid #8B9F3E;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         transition: transform 0.2s, box-shadow 0.2s;
     }
     
     .stat-card:hover {
         transform: translateY(-3px);
-        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.15);
+        box-shadow: 0 4px 15px rgba(139, 159, 62, 0.2);
     }
     
     .year-badge {
-        background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
+        background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%);
         color: white;
         padding: 0.5rem 1rem;
         border-radius: 20px;
@@ -82,7 +114,7 @@ st.markdown("""
         display: inline-block;
         margin-bottom: 1rem;
         font-family: 'Montserrat', sans-serif;
-        box-shadow: 0 2px 5px rgba(74, 144, 226, 0.3);
+        box-shadow: 0 2px 5px rgba(0, 102, 161, 0.3);
     }
     
     .stat-text {
@@ -94,7 +126,7 @@ st.markdown("""
     }
     
     .read-more-btn {
-        background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
+        background: linear-gradient(135deg, #8B9F3E 0%, #A8B968 100%);
         color: white;
         padding: 0.6rem 1.5rem;
         border-radius: 25px;
@@ -103,14 +135,15 @@ st.markdown("""
         display: inline-block;
         font-family: 'Montserrat', sans-serif;
         transition: transform 0.2s, box-shadow 0.2s;
-        box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+        box-shadow: 0 2px 8px rgba(139, 159, 62, 0.3);
     }
     
     .read-more-btn:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        box-shadow: 0 4px 12px rgba(139, 159, 62, 0.4);
         text-decoration: none;
         color: white;
+        background: linear-gradient(135deg, #9BB04A 0%, #B8C777 100%);
     }
     
     .source-text {
@@ -131,7 +164,7 @@ st.markdown("""
     /* Info boxes */
     .stInfo {
         background-color: #E8F4F8;
-        border-left: 5px solid #4A90E2;
+        border-left: 5px solid #0066A1;
         border-radius: 8px;
         font-family: 'Montserrat', sans-serif;
     }
@@ -147,7 +180,7 @@ st.markdown("""
     
     /* Stats counter */
     .stats-counter {
-        background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
+        background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%);
         color: white;
         padding: 0.75rem 1.5rem;
         border-radius: 25px;
@@ -155,7 +188,17 @@ st.markdown("""
         display: inline-block;
         margin-bottom: 1.5rem;
         font-family: 'Montserrat', sans-serif;
-        box-shadow: 0 3px 10px rgba(74, 144, 226, 0.3);
+        box-shadow: 0 3px 10px rgba(0, 102, 161, 0.3);
+    }
+    
+    /* Category title with accent */
+    .category-title {
+        color: #8B9F3E;
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 700;
+        border-bottom: 3px solid #8B9F3E;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -196,13 +239,31 @@ def get_hyperlink(workbook, row_index):
         pass
     return None
 
-# Custom header
-st.markdown("""
-<div class="custom-header">
-    <h1>📊 Good Sports Research Statistics</h1>
-    <p>Comprehensive data supporting youth sports and physical activity initiatives</p>
-</div>
-""", unsafe_allow_html=True)
+# Custom header with logo
+if logo_base64:
+    header_html = f"""
+    <div class="custom-header">
+        <div class="logo-container">
+            <img src="data:image/png;base64,{logo_base64}" alt="Good Sports Logo">
+        </div>
+        <div class="header-text">
+            <h1>Research Statistics Database</h1>
+            <p>Comprehensive data supporting youth sports and physical activity initiatives</p>
+        </div>
+    </div>
+    """
+else:
+    # Fallback without logo
+    header_html = """
+    <div class="custom-header">
+        <div class="header-text">
+            <h1>📊 Good Sports Research Statistics</h1>
+            <p>Comprehensive data supporting youth sports and physical activity initiatives</p>
+        </div>
+    </div>
+    """
+
+st.markdown(header_html, unsafe_allow_html=True)
 
 # Load data
 df, error = load_data()
@@ -213,7 +274,7 @@ if error:
     st.info("**Make sure:**")
     st.markdown("1. Your Excel file is in the same folder as this script")
     st.markdown("2. openpyxl is installed: `pip install openpyxl`")
-    st.markdown("3. Restart Streamlit completely (Ctrl+C then rerun)")
+    st.markdown("3. The Good Sports logo (good_sports_logo.png) is in the same folder")
     st.stop()
 
 # Load workbook for hyperlinks
@@ -232,7 +293,7 @@ selected_category = st.selectbox(
 
 # Display stats if category is selected
 if selected_category != "-- Select a Category --":
-    st.markdown(f"## {selected_category}")
+    st.markdown(f'<h2 class="category-title">{selected_category}</h2>', unsafe_allow_html=True)
     
     # Filter data
     filtered_df = df[df['Category'] == selected_category].copy()
@@ -283,10 +344,10 @@ else:
             with cols[i % 2]:
                 st.markdown(f"**•** {cat}")
 
-# Footer
+# Footer with Good Sports branding
 st.markdown("""
 <div class="footer">
-    <strong>Good Sports Research Project</strong> | 2025<br>
+    <strong style="color: #8B9F3E;">Good Sports Research Project</strong> | 2025<br>
     <em>Empowering youth through sports and physical activity</em>
 </div>
 """, unsafe_allow_html=True)
