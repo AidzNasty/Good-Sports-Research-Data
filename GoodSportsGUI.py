@@ -3,7 +3,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import openpyxl
 
 # Page config
 st.set_page_config(page_title="Good Sports Research Statistics", layout="wide")
