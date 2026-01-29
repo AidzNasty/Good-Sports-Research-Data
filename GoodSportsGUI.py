@@ -254,8 +254,15 @@ else:
             card_html += '<span class="old-badge">📦 OLD VERSION</span>'
         
         card_html += f'<div class="stat-text">{stat_text}</div>'
-        if source:
-            card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
+        
+        # Add source and article link together
+        if source or hyperlink:
+            card_html += '<div style="margin-top: 1rem;">'
+            if hyperlink:
+                card_html += f'<a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>'
+            if source:
+                card_html += f'<div class="source-text" style="margin-top: 0.5rem;">📄 <strong>Source:</strong> {source}</div>'
+            card_html += '</div>'
         
         st.markdown(card_html, unsafe_allow_html=True)
         
@@ -297,10 +304,6 @@ else:
                             preview_html += f'<div class="source-text">📄 <strong>Source:</strong> {link_source}</div>'
                         preview_html += '</div>'
                         st.markdown(preview_html, unsafe_allow_html=True)
-        
-        # Article link
-        if hyperlink:
-            st.markdown(f'<a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
 
