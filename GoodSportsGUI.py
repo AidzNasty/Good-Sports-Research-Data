@@ -20,7 +20,7 @@ def get_base64_image(image_path):
     except:
         return None
 
-# Try to load logo (place logo file in same directory as script)
+# Try to load logo
 logo_base64 = get_base64_image("good_sports_logo.png")
 
 # Custom CSS with Good Sports actual colors
@@ -79,6 +79,16 @@ st.markdown("""
         opacity: 0.95;
     }
     
+    /* Filter section */
+    .filter-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-top: 4px solid #8B9F3E;
+    }
+    
     /* Dropdown styling with Good Sports green */
     .stSelectbox > div > div {
         background-color: white;
@@ -104,6 +114,18 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(139, 159, 62, 0.2);
     }
     
+    /* New data card - special styling */
+    .stat-card.new-data {
+        border-left: 5px solid #FF6B35;
+        background: linear-gradient(to right, #FFF5F0 0%, white 10%);
+    }
+    
+    /* Updated data card - special styling */
+    .stat-card.updated-data {
+        border-left: 5px solid #0066A1;
+        background: linear-gradient(to right, #E8F4F8 0%, white 10%);
+    }
+    
     .year-badge {
         background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%);
         color: white;
@@ -115,6 +137,31 @@ st.markdown("""
         margin-bottom: 1rem;
         font-family: 'Montserrat', sans-serif;
         box-shadow: 0 2px 5px rgba(0, 102, 161, 0.3);
+    }
+    
+    /* Badge for new/updated */
+    .new-badge {
+        background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 15px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-block;
+        margin-left: 0.5rem;
+        font-family: 'Montserrat', sans-serif;
+    }
+    
+    .updated-badge {
+        background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 15px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-block;
+        margin-left: 0.5rem;
+        font-family: 'Montserrat', sans-serif;
     }
     
     .stat-text {
@@ -230,14 +277,24 @@ def get_hyperlink(workbook, row_index):
         return None
     try:
         sheet = workbook['Research']
-        # row_index is from pandas (0-indexed), Excel is 1-indexed + 1 for header
         excel_row = row_index + 2
-        cell = sheet.cell(row=excel_row, column=2)  # Column B = Source column
+        cell = sheet.cell(row=excel_row, column=2)
         if cell.hyperlink:
             return cell.hyperlink.target
     except Exception as e:
         pass
     return None
+
+def is_new_data(row):
+    """Check if this is new data based on Priority column"""
+    priority = row.get('Priority for Updated Stat', '')
+    return str(priority).strip() == 'New Data'
+
+def is_updated_data(row):
+    """Check if this is updated data based on Stat updated column"""
+    updated = row.get('Stat updated? (see comment)', '')
+    # Check if it starts with "Yes" or contains "ROW"
+    return pd.notna(updated) and (str(updated).strip().startswith('Yes') or 'ROW' in str(updated))
 
 # Custom header with logo
 if logo_base64:
@@ -253,7 +310,6 @@ if logo_base64:
     </div>
     """
 else:
-    # Fallback without logo
     header_html = """
     <div class="custom-header">
         <div class="header-text">
@@ -271,10 +327,6 @@ df, error = load_data()
 if error:
     st.error(error)
     st.info(f"**Current working directory:** `{os.getcwd()}`")
-    st.info("**Make sure:**")
-    st.markdown("1. Your Excel file is in the same folder as this script")
-    st.markdown("2. openpyxl is installed: `pip install openpyxl`")
-    st.markdown("3. The Good Sports logo (good_sports_logo.png) is in the same folder")
     st.stop()
 
 # Load workbook for hyperlinks
@@ -283,66 +335,104 @@ workbook = load_workbook()
 # Get unique categories
 categories = sorted([cat for cat in df['Category'].unique() if pd.notna(cat)])
 
-# Category dropdown with custom styling
-st.markdown("### 🔍 Select a Research Category")
-selected_category = st.selectbox(
-    "Choose a category to view all related statistics:",
-    ["-- Select a Category --"] + categories,
-    label_visibility="collapsed"
-)
+# Filter section
+st.markdown('<div class="filter-section">', unsafe_allow_html=True)
+st.markdown("### 🔍 Filter Research Statistics")
 
-# Display stats if category is selected
-if selected_category != "-- Select a Category --":
-    st.markdown(f'<h2 class="category-title">{selected_category}</h2>', unsafe_allow_html=True)
-    
-    # Filter data
-    filtered_df = df[df['Category'] == selected_category].copy()
-    
-    if len(filtered_df) == 0:
-        st.info("No statistics found for this category.")
-    else:
-        # Count stats
-        st.markdown(
-            f'<div class="stats-counter">📈 {len(filtered_df)} statistic(s) found</div>',
-            unsafe_allow_html=True
-        )
-        
-        # Display each stat
-        for idx, (orig_idx, row) in enumerate(filtered_df.iterrows(), 1):
-            # Create stat card
-            year = row['Year'] if pd.notna(row['Year']) else "N/A"
-            stat_text = row['Stat'] if pd.notna(row['Stat']) else "No description available"
-            source = row['Source'] if pd.notna(row['Source']) else None
-            
-            # Get hyperlink from Excel
-            hyperlink = get_hyperlink(workbook, orig_idx)
-            
-            # Build HTML for stat card
-            card_html = f'''
-            <div class="stat-card">
-                <div class="year-badge">📅 {year}</div>
-                <div class="stat-text">{stat_text}</div>
-            '''
-            
-            if source:
-                card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
-            
-            if hyperlink:
-                card_html += f'<br><a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>'
-            
-            card_html += '</div>'
-            
-            st.markdown(card_html, unsafe_allow_html=True)
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    selected_category = st.selectbox(
+        "Select Category:",
+        ["-- All Categories --"] + categories
+    )
+
+with col2:
+    data_filter = st.selectbox(
+        "Data Status:",
+        ["All Data", "New Data Only", "Updated Data Only"]
+    )
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Apply filters
+if selected_category == "-- All Categories --":
+    filtered_df = df.copy()
+    display_title = "All Statistics"
 else:
-    # Show welcome message with category preview
-    st.info("👆 Please select a category from the dropdown above to view statistics.")
+    filtered_df = df[df['Category'] == selected_category].copy()
+    display_title = selected_category
+
+# Apply data status filter
+if data_filter == "New Data Only":
+    filtered_df = filtered_df[filtered_df.apply(is_new_data, axis=1)]
+    display_title += " - New Data"
+elif data_filter == "Updated Data Only":
+    filtered_df = filtered_df[filtered_df.apply(is_updated_data, axis=1)]
+    display_title += " - Updated Data"
+
+# Display results
+if len(filtered_df) == 0:
+    st.info("No statistics found matching your filters.")
+else:
+    st.markdown(f'<h2 class="category-title">{display_title}</h2>', unsafe_allow_html=True)
     
-    # Show available categories in an expander
-    with st.expander("📋 View All Available Categories"):
-        cols = st.columns(2)
-        for i, cat in enumerate(categories):
-            with cols[i % 2]:
-                st.markdown(f"**•** {cat}")
+    # Count stats with breakdown
+    total = len(filtered_df)
+    new_count = sum(filtered_df.apply(is_new_data, axis=1))
+    updated_count = sum(filtered_df.apply(is_updated_data, axis=1))
+    
+    stats_info = f'<div class="stats-counter">📈 {total} statistic(s) found'
+    if data_filter == "All Data":
+        if new_count > 0:
+            stats_info += f' • {new_count} new'
+        if updated_count > 0:
+            stats_info += f' • {updated_count} updated'
+    stats_info += '</div>'
+    
+    st.markdown(stats_info, unsafe_allow_html=True)
+    
+    # Display each stat
+    for idx, (orig_idx, row) in enumerate(filtered_df.iterrows(), 1):
+        # Determine card styling
+        is_new = is_new_data(row)
+        is_updated = is_updated_data(row)
+        
+        card_class = "stat-card"
+        if is_new:
+            card_class += " new-data"
+        elif is_updated:
+            card_class += " updated-data"
+        
+        # Create stat card
+        year = row['Year'] if pd.notna(row['Year']) else "N/A"
+        stat_text = row['Stat'] if pd.notna(row['Stat']) else "No description available"
+        source = row['Source'] if pd.notna(row['Source']) else None
+        
+        # Get hyperlink from Excel
+        hyperlink = get_hyperlink(workbook, orig_idx)
+        
+        # Build HTML for stat card
+        card_html = f'<div class="{card_class}">'
+        card_html += f'<div class="year-badge">📅 {year}</div>'
+        
+        # Add new/updated badges
+        if is_new:
+            card_html += '<span class="new-badge">✨ NEW</span>'
+        elif is_updated:
+            card_html += '<span class="updated-badge">🔄 UPDATED</span>'
+        
+        card_html += f'<div class="stat-text">{stat_text}</div>'
+        
+        if source:
+            card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
+        
+        if hyperlink:
+            card_html += f'<br><a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>'
+        
+        card_html += '</div>'
+        
+        st.markdown(card_html, unsafe_allow_html=True)
 
 # Footer with Good Sports branding
 st.markdown("""
