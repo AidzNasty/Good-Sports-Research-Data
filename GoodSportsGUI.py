@@ -65,8 +65,8 @@ def load_data():
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='Research', engine='openpyxl')
         # FIX MERGED CELLS: Forward-fill Category and Year
-        df['Category'] = df['Category'].fillna(method='ffill')
-        df['Year'] = df['Year'].fillna(method='ffill')
+        df['Category'] = df['Category'].ffill()
+        df['Year'] = df['Year'].ffill()
         return df, None
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
@@ -101,9 +101,21 @@ def excel_row_to_pandas_index(excel_row):
 def categorize_stat(row, row_index):
     priority = str(row.get('Priority for Updated Stat', '')).strip()
     stat_updated = str(row.get('Stat updated? (see comment)', '')).strip()
+    excel_row = row_index + 2  # Convert to Excel row number
     
-    if priority == 'New Data' and 79 <= row_index + 2 <= 116:
-        return 'new'
+    # Rows 79-121 are either New Data or Updated Data
+    if 79 <= excel_row <= 121:
+        # Check if it's specifically marked as "New Data"
+        if priority == 'New Data':
+            return 'new'
+        # Otherwise if it has "Updated" in priority, it's an updated stat
+        elif 'Updated' in priority and 'ROW' in priority:
+            return 'updated'
+        # If in the range but not specifically categorized, treat as new
+        else:
+            return 'new'
+    
+    # Outside the 79-121 range, check if it's updated or old
     if 'Updated' in priority and 'ROW' in priority:
         return 'updated'
     if stat_updated.startswith('Yes') and 'ROW' in stat_updated:
