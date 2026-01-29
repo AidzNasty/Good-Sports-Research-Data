@@ -22,7 +22,7 @@ def load_data():
 
 @st.cache_resource
 def load_workbook():
-    return openpyxl.load_workbook('/mnt/user-data/uploads/2025_Good_Sports_Research_Project_Aidan_Conte.xlsx')
+    return openpyxl.load_workbook('/mnt/user-data/uploads/2025 Good Sports Research Project_Aidan Conte.xlsx')
 
 def get_hyperlink(workbook, row_num):
     """Extract hyperlink from Excel cell"""
