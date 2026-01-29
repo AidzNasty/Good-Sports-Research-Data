@@ -3,6 +3,7 @@ import pandas as pd
 import openpyxl
 import os
 import base64
+import re
 
 # Page config
 st.set_page_config(
@@ -126,6 +127,13 @@ st.markdown("""
         background: linear-gradient(to right, #E8F4F8 0%, white 10%);
     }
     
+    /* Replaced/old data card */
+    .stat-card.replaced-data {
+        border-left: 5px solid #95A5A6;
+        background: linear-gradient(to right, #F5F5F5 0%, white 10%);
+        opacity: 0.85;
+    }
+    
     .year-badge {
         background: linear-gradient(135deg, #0066A1 0%, #0082CC 100%);
         color: white;
@@ -139,7 +147,7 @@ st.markdown("""
         box-shadow: 0 2px 5px rgba(0, 102, 161, 0.3);
     }
     
-    /* Badge for new/updated */
+    /* Badge for new/updated/replaced */
     .new-badge {
         background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
         color: white;
@@ -164,12 +172,50 @@ st.markdown("""
         font-family: 'Montserrat', sans-serif;
     }
     
+    .replaced-badge {
+        background: linear-gradient(135deg, #95A5A6 0%, #7F8C8D 100%);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 15px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-block;
+        margin-left: 0.5rem;
+        font-family: 'Montserrat', sans-serif;
+    }
+    
     .stat-text {
         color: #2C3E50;
         font-size: 1.05rem;
         line-height: 1.6;
         font-family: 'Montserrat', sans-serif;
         margin: 1rem 0;
+    }
+    
+    .link-info {
+        background: #E8F4F8;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        font-size: 0.95rem;
+        font-family: 'Montserrat', sans-serif;
+        border-left: 3px solid #0066A1;
+    }
+    
+    .link-info.replaced-link {
+        background: #F5F5F5;
+        border-left: 3px solid #95A5A6;
+    }
+    
+    .internal-link {
+        color: #0066A1;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    
+    .internal-link:hover {
+        text-decoration: underline;
     }
     
     .read-more-btn {
@@ -285,6 +331,20 @@ def get_hyperlink(workbook, row_index):
         pass
     return None
 
+def extract_row_numbers(text):
+    """Extract row numbers from text like 'Yes (ROW 120, 121)' or 'Updated (ROW 4)'"""
+    if pd.isna(text):
+        return []
+    text = str(text)
+    # Find all numbers after "ROW"
+    matches = re.findall(r'ROW\s*(\d+)', text, re.IGNORECASE)
+    return [int(m) for m in matches]
+
+def excel_row_to_pandas_index(excel_row):
+    """Convert Excel row number (1-indexed with header) to pandas index (0-indexed)"""
+    # Excel row 2 = pandas index 0 (row 1 is header)
+    return excel_row - 2
+
 def is_new_data(row):
     """Check if this is new data based on Priority column"""
     priority = row.get('Priority for Updated Stat', '')
@@ -293,8 +353,32 @@ def is_new_data(row):
 def is_updated_data(row):
     """Check if this is updated data based on Stat updated column"""
     updated = row.get('Stat updated? (see comment)', '')
-    # Check if it starts with "Yes" or contains "ROW"
+    priority = row.get('Priority for Updated Stat', '')
+    # Check if priority says "Updated" or stat updated says "Yes"
+    return (pd.notna(priority) and 'Updated' in str(priority)) or \
+           (pd.notna(updated) and str(updated).strip().startswith('Yes'))
+
+def is_replaced_data(row):
+    """Check if this stat has been replaced by a newer one"""
+    updated = row.get('Stat updated? (see comment)', '')
     return pd.notna(updated) and (str(updated).strip().startswith('Yes') or 'ROW' in str(updated))
+
+def get_replacement_rows(row, df):
+    """Get the rows that replaced this stat"""
+    updated = row.get('Stat updated? (see comment)', '')
+    excel_rows = extract_row_numbers(updated)
+    pandas_indices = [excel_row_to_pandas_index(r) for r in excel_rows]
+    # Filter to valid indices
+    return [idx for idx in pandas_indices if 0 <= idx < len(df)]
+
+def get_replaced_row(row):
+    """Get the row that this stat replaces"""
+    priority = row.get('Priority for Updated Stat', '')
+    excel_rows = extract_row_numbers(priority)
+    if excel_rows:
+        pandas_idx = excel_row_to_pandas_index(excel_rows[0])
+        return pandas_idx if pandas_idx >= 0 else None
+    return None
 
 # Custom header with logo
 if logo_base64:
@@ -350,7 +434,7 @@ with col1:
 with col2:
     data_filter = st.selectbox(
         "Data Status:",
-        ["All Data", "New Data Only", "Updated Data Only"]
+        ["All Data", "New Data Only", "Updated Data Only", "Show Replaced Data"]
     )
 
 st.markdown('</div>', unsafe_allow_html=True)
@@ -370,6 +454,13 @@ if data_filter == "New Data Only":
 elif data_filter == "Updated Data Only":
     filtered_df = filtered_df[filtered_df.apply(is_updated_data, axis=1)]
     display_title += " - Updated Data"
+elif data_filter == "Show Replaced Data":
+    # Show only old stats that have been replaced
+    filtered_df = filtered_df[filtered_df.apply(is_replaced_data, axis=1)]
+    display_title += " - Replaced Data"
+else:
+    # For "All Data", hide replaced stats by default
+    filtered_df = filtered_df[~filtered_df.apply(is_replaced_data, axis=1)]
 
 # Display results
 if len(filtered_df) == 0:
@@ -394,12 +485,15 @@ else:
     
     # Display each stat
     for idx, (orig_idx, row) in enumerate(filtered_df.iterrows(), 1):
-        # Determine card styling
+        # Determine card styling and status
         is_new = is_new_data(row)
         is_updated = is_updated_data(row)
+        is_replaced = is_replaced_data(row)
         
         card_class = "stat-card"
-        if is_new:
+        if is_replaced:
+            card_class += " replaced-data"
+        elif is_new:
             card_class += " new-data"
         elif is_updated:
             card_class += " updated-data"
@@ -416,13 +510,35 @@ else:
         card_html = f'<div class="{card_class}">'
         card_html += f'<div class="year-badge">📅 {year}</div>'
         
-        # Add new/updated badges
-        if is_new:
+        # Add status badges
+        if is_replaced:
+            card_html += '<span class="replaced-badge">📦 REPLACED</span>'
+        elif is_new:
             card_html += '<span class="new-badge">✨ NEW</span>'
         elif is_updated:
             card_html += '<span class="updated-badge">🔄 UPDATED</span>'
         
         card_html += f'<div class="stat-text">{stat_text}</div>'
+        
+        # Show links to replacement stats (for old/replaced stats)
+        if is_replaced:
+            replacement_indices = get_replacement_rows(row, df)
+            if replacement_indices:
+                card_html += '<div class="link-info">'
+                card_html += '🔄 <strong>This stat has been replaced by:</strong><br>'
+                for repl_idx in replacement_indices:
+                    repl_year = df.iloc[repl_idx]['Year'] if pd.notna(df.iloc[repl_idx]['Year']) else "N/A"
+                    card_html += f'• <span class="internal-link">Updated stat from {repl_year} (Row {repl_idx + 2})</span><br>'
+                card_html += '</div>'
+        
+        # Show link to original stat (for updated stats)
+        if is_updated and not is_replaced:
+            orig_idx_link = get_replaced_row(row)
+            if orig_idx_link is not None and orig_idx_link < len(df):
+                orig_year = df.iloc[orig_idx_link]['Year'] if pd.notna(df.iloc[orig_idx_link]['Year']) else "N/A"
+                card_html += '<div class="link-info replaced-link">'
+                card_html += f'📌 <strong>This replaces:</strong> Original stat from {orig_year} (Row {orig_idx_link + 2})'
+                card_html += '</div>'
         
         if source:
             card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
