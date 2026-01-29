@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import openpyxl
 import os
 
 # Page config
@@ -92,17 +93,31 @@ st.markdown("""
         margin: 1rem 0;
     }
     
-    .source-link {
-        color: #4A90E2;
-        font-size: 0.9rem;
-        font-weight: 600;
+    .read-more-btn {
+        background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
+        color: white;
+        padding: 0.6rem 1.5rem;
+        border-radius: 25px;
         text-decoration: none;
+        font-weight: 600;
+        display: inline-block;
         font-family: 'Montserrat', sans-serif;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
     }
     
-    .source-link:hover {
-        color: #FF6B35;
-        text-decoration: underline;
+    .read-more-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        text-decoration: none;
+        color: white;
+    }
+    
+    .source-text {
+        color: #7F8C8D;
+        font-size: 0.9rem;
+        font-family: 'Montserrat', sans-serif;
+        margin-top: 0.5rem;
     }
     
     /* Category selector label */
@@ -148,22 +163,38 @@ st.markdown("""
 # File path
 EXCEL_FILE = '2025 Good Sports Research Project_Aidan Conte.xlsx'
 
-# Load data
+# Load data and hyperlinks
 @st.cache_data
 def load_data():
     try:
         df = pd.read_excel(EXCEL_FILE, sheet_name='Research', engine='openpyxl')
         return df, None
-    except ImportError:
-        try:
-            df = pd.read_excel(EXCEL_FILE, sheet_name='Research')
-            return df, None
-        except Exception as e:
-            return None, f"❌ Error: Install openpyxl with: pip install openpyxl\n\nDetails: {str(e)}"
-    except FileNotFoundError:
-        return None, f"❌ Error: Could not find '{EXCEL_FILE}' in the current directory."
     except Exception as e:
         return None, f"❌ Error loading file: {str(e)}"
+
+@st.cache_resource
+def load_workbook():
+    """Load workbook to extract hyperlinks"""
+    try:
+        return openpyxl.load_workbook(EXCEL_FILE)
+    except Exception as e:
+        st.warning(f"Could not load hyperlinks: {e}")
+        return None
+
+def get_hyperlink(workbook, row_index):
+    """Extract hyperlink from Excel cell in the Source column (column B)"""
+    if workbook is None:
+        return None
+    try:
+        sheet = workbook['Research']
+        # row_index is from pandas (0-indexed), Excel is 1-indexed + 1 for header
+        excel_row = row_index + 2
+        cell = sheet.cell(row=excel_row, column=2)  # Column B = Source column
+        if cell.hyperlink:
+            return cell.hyperlink.target
+    except Exception as e:
+        pass
+    return None
 
 # Custom header
 st.markdown("""
@@ -184,6 +215,9 @@ if error:
     st.markdown("2. openpyxl is installed: `pip install openpyxl`")
     st.markdown("3. Restart Streamlit completely (Ctrl+C then rerun)")
     st.stop()
+
+# Load workbook for hyperlinks
+workbook = load_workbook()
 
 # Get unique categories
 categories = sorted([cat for cat in df['Category'].unique() if pd.notna(cat)])
@@ -219,6 +253,9 @@ if selected_category != "-- Select a Category --":
             stat_text = row['Stat'] if pd.notna(row['Stat']) else "No description available"
             source = row['Source'] if pd.notna(row['Source']) else None
             
+            # Get hyperlink from Excel
+            hyperlink = get_hyperlink(workbook, orig_idx)
+            
             # Build HTML for stat card
             card_html = f'''
             <div class="stat-card">
@@ -227,7 +264,10 @@ if selected_category != "-- Select a Category --":
             '''
             
             if source:
-                card_html += f'<div>📄 <span style="color: #7F8C8D; font-family: Montserrat;">Source:</span> <span class="source-link">{source}</span></div>'
+                card_html += f'<div class="source-text">📄 <strong>Source:</strong> {source}</div>'
+            
+            if hyperlink:
+                card_html += f'<br><a href="{hyperlink}" target="_blank" class="read-more-btn">🔗 Read Full Article</a>'
             
             card_html += '</div>'
             
