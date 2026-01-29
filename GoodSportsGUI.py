@@ -16,7 +16,7 @@ st.set_page_config(page_title="Good Sports Research Statistics", layout="wide")
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_excel('/mnt/user-data/uploads/2025_Good_Sports_Research_Project_Aidan_Conte.xlsx', 
+    df = pd.read_excel('/mnt/user-data/uploads/2025 Good Sports Research Project_Aidan Conte.xlsx', 
                        sheet_name='Research')
     return df
 
