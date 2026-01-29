@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="Good Sports Research Statistics", layout="wide")
 
 # File path - UPDATE THIS to match your file location
-EXCEL_FILE = '2025 Good Sports Research Project_Aidan Conte.xlsx'
+EXCEL_FILE = '/Users/aidanconte/Library/CloudStorage/OneDrive-SuffolkUniversity/Good Sports Internship/2025 Good Sports Research Project_Aidan Conte.xlsx'
 
 # Load data
 @st.cache_data
